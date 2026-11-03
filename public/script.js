@@ -5,6 +5,9 @@ const healthElement = document.getElementById("health")
 const bulletElement = document.getElementById("bullets")
 const waveElement = document.getElementById("wave")
 const gameOverElement = document.getElementById("gameOver")
+const usernameEntryElement = document.getElementById("username-entry");
+const gameOverProcessed = document.getElementById("processed-game-over")
+const usernameDisplay = document.getElementById("username")
 const ctx = gameScreen.getContext("2d")
 gameScreen.height = window.innerHeight
 gameScreen.width = window.innerWidth
@@ -42,6 +45,7 @@ const enemies = []
 const bullets = []
 const bulletCrates = []
 let bulletRequest = false;
+let username = "DefaultErroredUsername"
 
 const waveDat = {
     wave: 1,
@@ -279,11 +283,63 @@ function gameLoop() {
     waveElement.textContent = `Wave: ${waveDat.wave} (Enemies Till Next Wave: ${waveDat.enemiesToSpawn - waveDat.currentWave.spawnedEnemies})`
 
     if (player.health <= 0) {
-        gameOverElement.style.display = "flex"
+        gameOverElement.style.display = "flex";
+        (async () => {
+            try {
+                const response = await fetch("/api/leaderboard", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        "username": username,
+                        "wave": waveDat.wave
+                    })
+                });
+                if (response.ok) {
+                    gameOverProcessed.style.display = "block";
+                    usernameEntryElement.reset();
+                } else {throw new Error;}
+            } catch (error) {
+                gameOverProcessed.innerText = "Network Error/Request Error";
+                gameOverProcessed.style.display = "block";
+                usernameEntryElement.reset();
+            }
+            try {
+                const response = await fetch("/api/leaderboard", {
+                    method: "GET",
+                    headers: {"Content-Type": "application/json"}
+                });
+            if (response.ok) {
+                const data = await response.json();
+
+                gameOverProcessed.style.display = "flex";
+                gameOverProcessed.innerHTML = data
+                    .map((entry, index) =>
+                        `${index + 1}. ${entry.username} - Wave ${entry.wave}`
+                    )
+                    .join("<br>");
+            } else {throw new Error;}
+            } catch (error) {
+                gameOverProcessed.innerText = "Network Error/Request Error";
+                gameOverProcessed.style.display = "block";
+                usernameEntryElement.reset();
+                setTimeout(() => {
+                    gameOverProcessed.style.display = "none";
+                    gameOverProcessed.innerText = "Processed";
+                }, 2000);
+            }
+        })()
         return;
     }
 
     requestAnimationFrame(gameLoop)
 }
 
-requestAnimationFrame(gameLoop)
+usernameEntryElement.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(usernameEntryElement);
+    username = data.get("username")
+    usernameEntryElement.style.display = "none";
+    usernameDisplay.textContent = `Username: ${username}`
+
+    requestAnimationFrame(gameLoop)
+});
